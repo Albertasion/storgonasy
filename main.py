@@ -10,6 +10,7 @@ class Parser:
         self.basic_url = "https://storgom.ua"
         self.main_catalog_links = []
         self.sub_catalog_links = []
+        self.all_links_category = []
         self.ua = UserAgent()
         self.headers = {
             "accept": "*/*",
@@ -38,6 +39,40 @@ class Parser:
                         url = f'{self.basic_url}{href}'
                         self.sub_catalog_links.append(url)
 
+    async def get_pagination(self):
+        async with aiohttp.ClientSession() as session:
+            for link in self.sub_catalog_links[0:15]:
+                async with session.get(url=link, headers=self.headers) as response:
+                    try:
+                        html = await response.text()
+                        soup = BeautifulSoup(html, "lxml")
+                        pagination = soup.find("div", class_ = "pagination").find_all("li")
+                        if pagination==None:
+                            print(f'link IF{link}')
+                        else:
+                            # print(f'PAGINATION ELSE{pagination}')
+                            # print(f'LAST:{pagination[-2]}')
+                            page_first = pagination[-2].find('a')
+                            # print(f'PAGE_FIRST{page_first}')
+                            last_page = page_first.text
+                            # print(last_page)
+                            page_first_href = page_first['href']
+                            link_page_first = page_first_href.split('/')[1]
+                            page_first_url = f'{self.basic_url}/{link_page_first}.html'
+                            self.all_links_category.append(page_first_url)
+                            for i in range(2, int(last_page)+1):
+                                url_with_pagination =f'{self.basic_url}/{link_page_first}/page-{i}.html'
+                                print(url_with_pagination)
+                                self.all_links_category.append(url_with_pagination)
+
+
+                    except:
+                        # print(f'EXEPT LINK{link}')
+                        self.all_links_category.append(link)
+
+
+
+
     async def gather_all_catalog_tasks(self):
         async with aiohttp.ClientSession() as session:
             all_catalog_tasks = []
@@ -51,6 +86,8 @@ class Parser:
         asyncio.get_event_loop().run_until_complete(self.get_main_catalog_links())
         asyncio.get_event_loop().run_until_complete(self.gather_all_catalog_tasks())
         print(self.sub_catalog_links)
+        asyncio.get_event_loop().run_until_complete(self.get_pagination())
+        print(self.all_links_category)
 
 if __name__ == "__main__":
     parser = Parser()
