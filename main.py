@@ -3,7 +3,7 @@ import asyncio
 import aiohttp
 from fake_useragent import UserAgent
 import lxml
-import
+import xlsxwriter
 class Parser:
     def __init__(self):
         self.basic_url = "https://storgom.ua"
@@ -11,6 +11,12 @@ class Parser:
         self.sub_catalog_links = []
         self.all_links_category = []
         self.all_products_links = []
+        self.name_product = []
+        self.sku_product = []
+        self.old_price_list = []
+        self.new_price_list = []
+        self.regular_price_list = []
+        self.available_list = []
         self.ua = UserAgent()
         self.headers = {
             "accept": "*/*",
@@ -86,7 +92,7 @@ class Parser:
     async def gather_pages_tasks(self):
         async with aiohttp.ClientSession() as session:
             pages_tasks = []
-            for num, link in enumerate(self.all_links_category[0:15]):
+            for num, link in enumerate(self.all_links_category):
                 task = asyncio.create_task(self.get_pages_products(session, link, num))
                 pages_tasks.append(task)
             await asyncio.gather(*pages_tasks)
@@ -96,6 +102,7 @@ class Parser:
                     soup = BeautifulSoup(html, 'lxml')
                     try:
                         h1 = soup.h1.string.strip()
+                        self.name_product.append(h1)
                         print(h1)
                     except:
                         pass
@@ -103,59 +110,82 @@ class Parser:
                         sku_div = soup.find('div', class_ = 'sku')
                         sku = sku_div.find('span').text.strip()
                         sku_stru = f'{sku}STRU'
-                        print(sku_stru)
+                        self.sku_product.append(sku_stru)
                     except:
                         print('net artikula')
                     try:
-                        old_price_raw = soup.find('div', 'old-price').text.strip()
-                        old_price = old_price_raw.replace(' ', '')
-                        print(old_price)
+                        price_block = soup.find('div', 'price-wrapper')
                     except:
-                        print('net old price')
+                        print('НЕТ БЛОКА')
                     try:
-                        new_price_raw = soup.find('div', 'new-price').text.strip()
+                        old_price_raw = price_block.find('div', 'old-price').text.strip()
+                        old_price = old_price_raw.replace(' ', '')
+                        self.old_price_list.append(old_price)
+                    except:
+                        regular_price_raw = price_block.text.strip()
+                        regular_price_without_cur = regular_price_raw.replace('₴', '')
+                        regular_price = regular_price_without_cur.replace(' ', '')
+                        regi = regular_price.split('\n')[0]
+                        self.old_price_list.append(regi)
+
+                    try:
+                        new_price_raw = price_block.find('div', 'new-price').text.strip()
                         new_price_without_cur = new_price_raw.replace('₴', '')
                         new_price = new_price_without_cur.replace(' ', '')
-                        print(new_price)
+                        self.new_price_list.append(new_price)
                     except:
-                        print('net new price')
-                    try:
-                        regular_price_raw = soup.find('div', 'price').text.strip()
-                        regular_price_without_cur = regular_price_raw.replace('₴', '')
-                        regular_price = new_price_without_cur.replace(' ', '')
-                        print(regular_price)
-                    except:
-                        print('net obucnoj cenu')
+                        regular_price_raw1 = price_block.text.strip()
+                        regular_price_without_cur1 = regular_price_raw1.replace('₴', '')
+                        regular_price1 = regular_price_without_cur1.replace(' ', '')
+                        regi1 = regular_price1.split('\n')[0]
+                        self.new_price_list.append(regi1)
                     try:
                         available = soup.find('div', class_ = 'status').text.strip()
                         print(available)
+                        self.available_list.append(available)
                     except:
                         print('net nalichia')
 
     async def gather_load_products_tasks(self):
         async with aiohttp.ClientSession() as session:
             load_pages_tasks = []
-            for num, link in enumerate(self.all_products_links[0:10]):
+            for num, link in enumerate(self.all_products_links):
                 task = asyncio.create_task(self.load_products(session, link, num))
                 load_pages_tasks.append(task)
             await asyncio.gather(*load_pages_tasks)
 
     def write_to_csv(self):
-        print("Writing csv")
-
-        with open("test.csv", "w", encoding="utf-8") as file:
-            headers = ["title", "price", "discount",
-                       "num_scores", "rating", "link"]
-            w = csv.DictWriter(file, headers)
-            w.writeheader()
-            for row in self.csv_rows:
-                w.writerow(row)
+        print("zapis v xls")
+        workbook = xlsxwriter.Workbook('demo.xlsx')
+        worksheet = workbook.add_worksheet()
+        row_prod = 0
+        row_sku = 0
+        row_old_price = 0
+        row_new_price = 0
+        row_available= 0
+        for item in self.name_product:
+            worksheet.write(row_prod, 0, item)
+            row_prod += 1
+        for item2 in self.sku_product:
+            worksheet.write(row_sku, 1, item2)
+            row_sku += 1
+        for item3 in self.old_price_list:
+            worksheet.write(row_old_price, 2, item3)
+            row_old_price += 1
+        for item4 in self.new_price_list:
+            worksheet.write(row_new_price, 3, item4)
+            row_new_price += 1
+        for item5 in self.available_list:
+            worksheet.write(row_available, 4, item5)
+            row_available += 1
+        workbook.close()
     def main(self):
         asyncio.get_event_loop().run_until_complete(self.get_main_catalog_links())
         asyncio.get_event_loop().run_until_complete(self.gather_all_catalog_tasks())
         asyncio.get_event_loop().run_until_complete(self.gather_pagination_tasks())
         asyncio.get_event_loop().run_until_complete(self.gather_pages_tasks())
         asyncio.get_event_loop().run_until_complete(self.gather_load_products_tasks())
+        self.write_to_csv()
         print(self.all_products_links)
 if __name__ == "__main__":
     parser = Parser()
