@@ -3,8 +3,7 @@ import asyncio
 import aiohttp
 from fake_useragent import UserAgent
 import lxml
-# from random import choice
-# proxy_list = open("http_proxies.txt").readlines()
+import
 class Parser:
     def __init__(self):
         self.basic_url = "https://storgom.ua"
@@ -29,7 +28,6 @@ class Parser:
                     url = f'{self.basic_url}{href}'
                     self.main_catalog_links.append(url)
         print(self.main_catalog_links)
-
     async def get_all_catalog_links(self, session, link, num):
                 async with session.get(url = link, headers=self.headers) as response:
                     html = await response.text()
@@ -60,7 +58,6 @@ class Parser:
                 except:
                     print(f'EXEPT LINK{link}')
                     self.all_links_category.append(link)
-
     async def gather_all_catalog_tasks(self):
         async with aiohttp.ClientSession() as session:
             all_catalog_tasks = []
@@ -68,7 +65,6 @@ class Parser:
                 task = asyncio.create_task(self.get_all_catalog_links(session, link, num))
                 all_catalog_tasks.append(task)
             await asyncio.gather(*all_catalog_tasks)
-
     async def gather_pagination_tasks(self):
         async with aiohttp.ClientSession() as session:
             pagination_task = []
@@ -76,7 +72,6 @@ class Parser:
                 task = asyncio.create_task(self.get_pagination(session, link, num))
                 pagination_task.append(task)
             await asyncio.gather(*pagination_task)
-
     async def get_pages_products(self, session, link, num):
                 async with session.get(url = link, headers = self.headers) as response:
                     html = await response.text()
@@ -88,7 +83,6 @@ class Parser:
                         url = f'{self.basic_url}{href}'
                         print(url)
                         self.all_products_links.append(url)
-
     async def gather_pages_tasks(self):
         async with aiohttp.ClientSession() as session:
             pages_tasks = []
@@ -96,7 +90,6 @@ class Parser:
                 task = asyncio.create_task(self.get_pages_products(session, link, num))
                 pages_tasks.append(task)
             await asyncio.gather(*pages_tasks)
-
     async def load_products(self, session, link, num):
                 async with session.get(url = link, headers = self.headers) as response:
                     html = await response.text()
@@ -106,16 +99,57 @@ class Parser:
                         print(h1)
                     except:
                         pass
+                    try:
+                        sku_div = soup.find('div', class_ = 'sku')
+                        sku = sku_div.find('span').text.strip()
+                        sku_stru = f'{sku}STRU'
+                        print(sku_stru)
+                    except:
+                        print('net artikula')
+                    try:
+                        old_price_raw = soup.find('div', 'old-price').text.strip()
+                        old_price = old_price_raw.replace(' ', '')
+                        print(old_price)
+                    except:
+                        print('net old price')
+                    try:
+                        new_price_raw = soup.find('div', 'new-price').text.strip()
+                        new_price_without_cur = new_price_raw.replace('₴', '')
+                        new_price = new_price_without_cur.replace(' ', '')
+                        print(new_price)
+                    except:
+                        print('net new price')
+                    try:
+                        regular_price_raw = soup.find('div', 'price').text.strip()
+                        regular_price_without_cur = regular_price_raw.replace('₴', '')
+                        regular_price = new_price_without_cur.replace(' ', '')
+                        print(regular_price)
+                    except:
+                        print('net obucnoj cenu')
+                    try:
+                        available = soup.find('div', class_ = 'status').text.strip()
+                        print(available)
+                    except:
+                        print('net nalichia')
 
     async def gather_load_products_tasks(self):
         async with aiohttp.ClientSession() as session:
             load_pages_tasks = []
-            for num, link in enumerate(self.all_products_links[0:40]):
+            for num, link in enumerate(self.all_products_links[0:10]):
                 task = asyncio.create_task(self.load_products(session, link, num))
                 load_pages_tasks.append(task)
             await asyncio.gather(*load_pages_tasks)
 
+    def write_to_csv(self):
+        print("Writing csv")
 
+        with open("test.csv", "w", encoding="utf-8") as file:
+            headers = ["title", "price", "discount",
+                       "num_scores", "rating", "link"]
+            w = csv.DictWriter(file, headers)
+            w.writeheader()
+            for row in self.csv_rows:
+                w.writerow(row)
     def main(self):
         asyncio.get_event_loop().run_until_complete(self.get_main_catalog_links())
         asyncio.get_event_loop().run_until_complete(self.gather_all_catalog_tasks())
@@ -123,7 +157,6 @@ class Parser:
         asyncio.get_event_loop().run_until_complete(self.gather_pages_tasks())
         asyncio.get_event_loop().run_until_complete(self.gather_load_products_tasks())
         print(self.all_products_links)
-
 if __name__ == "__main__":
     parser = Parser()
     parser.main()
