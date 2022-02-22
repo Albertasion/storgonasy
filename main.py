@@ -11,6 +11,7 @@ class Parser:
         self.main_catalog_links = []
         self.sub_catalog_links = []
         self.all_links_category = []
+
         self.all_products_links = []
         self.name_product = []
         self.sku_product = []
@@ -36,15 +37,19 @@ class Parser:
                     self.main_catalog_links.append(url)
         print(self.main_catalog_links)
     async def get_all_catalog_links(self, session, link, num):
-                async with session.get(url = link, headers=self.headers) as response:
-                    html = await response.text()
-                    soup = BeautifulSoup(html, "lxml")
-                    sub_catalog_links = soup.find_all('a', class_ = 'd-flex')
-                    for sublink in sub_catalog_links:
-                        href = sublink['href']
-                        url = f'{self.basic_url}{href}'
-                        self.sub_catalog_links.append(url)
+        try:
+            async with session.get(url = link, headers=self.headers) as response:
+                html = await response.text()
+                soup = BeautifulSoup(html, "lxml")
+                sub_catalog_links = soup.find_all('a', class_ = 'd-flex')
+                for sublink in sub_catalog_links:
+                    href = sublink['href']
+                    url = f'{self.basic_url}{href}'
+                    self.sub_catalog_links.append(url)
+        except:
+            print('sbroshen')
     async def get_pagination(self, session, link, num):
+        try:
             async with session.get(url=link, headers=self.headers) as response:
                 try:
                     html = await response.text()
@@ -59,16 +64,22 @@ class Parser:
                     for i in range(2, int(last_page)+1):
                         url_with_pagination = f'{self.basic_url}/{link_page_first}/page-{i}.html'
                         self.all_links_category.append(url_with_pagination)
+                        print(url_with_pagination)
                 except:
                     print(f'EXEPT LINK:{link}')
                     self.all_links_category.append(link)
+        except:
+            print("OSHIBKA ZAPROSA")
     async def gather_all_catalog_tasks(self):
-        async with aiohttp.ClientSession() as session:
-            all_catalog_tasks = []
-            for num, link in enumerate(self.main_catalog_links):
-                task = asyncio.create_task(self.get_all_catalog_links(session, link, num))
-                all_catalog_tasks.append(task)
-            await asyncio.gather(*all_catalog_tasks)
+        try:
+            async with aiohttp.ClientSession() as session:
+                all_catalog_tasks = []
+                for num, link in enumerate(self.main_catalog_links):
+                    task = asyncio.create_task(self.get_all_catalog_links(session, link, num))
+                    all_catalog_tasks.append(task)
+                await asyncio.gather(*all_catalog_tasks)
+        except:
+            print('ZAPROS OTBROSHEN V SAMOM NACHALE')
 
     async def gather_pagination_tasks(self):
         async with aiohttp.ClientSession() as session:
@@ -77,6 +88,7 @@ class Parser:
                 task = asyncio.create_task(self.get_pagination(session, link, num))
                 pagination_task.append(task)
             await asyncio.gather(*pagination_task)
+
     async def get_pages_products(self, session, link, num):
         try:
             async with session.get(url = link, headers = self.headers) as response:
@@ -89,19 +101,24 @@ class Parser:
                     url = f'{self.basic_url}{href}'
                     print(url)
                     self.all_products_links.append(url)
+
         except:
             print('Сброшен запрос1')
+
     async def gather_pages_tasks(self):
         async with aiohttp.ClientSession() as session:
             pages_tasks = []
-            for num, link in enumerate(self.all_links_category):
+            for num, link in enumerate(self.all_links_category_set):
                 task = asyncio.create_task(self.get_pages_products(session, link, num))
                 pages_tasks.append(task)
             await asyncio.gather(*pages_tasks)
+
+
+
     async def load_products(self, session, link, num):
         try:
             async with session.get(url = link, headers = self.headers) as response:
-                print(link)
+                print(f'{num}:{link}')
                 html = await response.text()
                 soup = BeautifulSoup(html, 'lxml')
                 try:
@@ -151,17 +168,37 @@ class Parser:
             print('СБРОШЕН ЗАПРОС')
 
     async def gather_load_products_tasks(self):
-        async with aiohttp.ClientSession() as session:
-            load_pages_tasks = []
-            for num, link in enumerate(self.all_products_links):
-                task = asyncio.create_task(self.load_products(session, link, num))
-                print(f'load products{task}')
-                load_pages_tasks.append(task)
-            await asyncio.gather(*load_pages_tasks)
+        try:
+            async with aiohttp.ClientSession() as session:
+                load_pages_tasks = []
+                for i in range(5000):
+                    for num, link in enumerate(self.all_products_links_set):
+                        task = asyncio.create_task(self.load_products(session, link, num))
+                        load_pages_tasks.append(task)
+                    await asyncio.gather(*load_pages_tasks)
+        except:
+            print('sbros taska')
 
+    def write_to_csv_links(self):
+        workbook = xlsxwriter.Workbook('links.xlsx')
+        worksheet = workbook.add_worksheet()
+        row_prod1 = 0
+        for item7 in self.all_links_category_set:
+            worksheet.write(row_prod1, 0, item7)
+            row_prod1 += 1
+        workbook.close()
+
+    def write_to_csv_pages(self):
+        workbook = xlsxwriter.Workbook('pages.xlsx')
+        worksheet = workbook.add_worksheet()
+        row_prod1 = 0
+        for item7 in self.all_products_links_set:
+            worksheet.write(row_prod1, 0, item7)
+            row_prod1 += 1
+        workbook.close()
     def write_to_csv(self):
         print("zapis v xls")
-        workbook = xlsxwriter.Workbook('demo.xlsx')
+        workbook = xlsxwriter.Workbook('storgom.xlsx')
         worksheet = workbook.add_worksheet()
         row_prod = 0
         row_sku = 0
@@ -189,7 +226,22 @@ class Parser:
         asyncio.get_event_loop().run_until_complete(self.get_main_catalog_links())
         asyncio.get_event_loop().run_until_complete(self.gather_all_catalog_tasks())
         asyncio.get_event_loop().run_until_complete(self.gather_pagination_tasks())
+
+
+
+
+        print(self.all_links_category)
+        self.all_links_category_set = set(self.all_links_category)
+        print(self.all_links_category_set)
+        print(len(self.all_links_category))
+        print(len(self.all_links_category_set))
+        self.write_to_csv_links()
         asyncio.get_event_loop().run_until_complete(self.gather_pages_tasks())
+        print(self.all_products_links)
+        self.all_products_links_set = set(self.all_products_links)
+        print(len(self.all_products_links_set))
+        self.write_to_csv_pages()
+        time.sleep(10)
         asyncio.get_event_loop().run_until_complete(self.gather_load_products_tasks())
         self.write_to_csv()
         finish_time = time.time() - start_time
